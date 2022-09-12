@@ -16,6 +16,7 @@ mod entities;
 mod dns;
 mod util;
 mod routes;
+mod rpc;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -68,8 +69,6 @@ async fn main() {
 
     info!("Starting web server...");
     let app = Router::new()
-        .route("/", get(routes::status::status))
-
         // Auth
         .route("/user/register", post(routes::auth::register::register))
         .route("/user/login", post(routes::auth::login::login))
@@ -84,6 +83,12 @@ async fn main() {
         // Records
 
         // Proxies
+
+        // RPC
+        .route("/rpc", post(rpc::rpc))
+
+        // Misc
+        .route("/", get(routes::status::status))
 
         .layer(
         	ServiceBuilder::new()
