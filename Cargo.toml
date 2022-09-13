@@ -44,3 +44,5 @@ regex = "1.6.0"
 async-trait = "0.1.57"
 
 user-agent-parser = "0.3.3"
+
+lapin = "2.1.1"

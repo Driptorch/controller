@@ -97,7 +97,7 @@ impl<S> FromRequestParts<S> for UserFromBearer
             Some((name, contents)) if name == "Bearer" => {
                 // Get database connection from header
                 let connection: &DatabaseConnection = parts.extensions.get::<DatabaseConnection>()
-                    .expect("Failed to get database connection from auth extractor");
+                    .expect("Failed to get database connection from users extractor");
 
                 match get_user_from_token(contents.to_string(), connection).await {
                     None => {

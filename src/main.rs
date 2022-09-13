@@ -8,6 +8,7 @@ use axum::extract::Extension;
 use axum::Router;
 use axum::routing::{delete, get, post};
 use dotenv::dotenv;
+use lapin::ConnectionProperties;
 use sea_orm::{ConnectOptions, Database};
 use sea_orm_migration::prelude::*;
 use tower::ServiceBuilder;
@@ -67,14 +68,27 @@ async fn main() {
         .await
         .expect("Failed to run migrations! Halting start-up.");
 
+    info!("Connecting to message broker...");
+    let amqp_addr = env::var("AMQP_ADDR")
+        .expect("AMQP_ADDR mut be set! Halting start-up.");
+    let amqp_connection = lapin::Connection::connect(&amqp_addr, ConnectionProperties::default())
+        .await
+        .expect("Failed to connect to the message broker! Halting start-up.");
+    let amqp_channel = amqp_connection.create_channel()
+        .await
+        .expect("Failed to create a message broker channel! Halting start-up.");
+
     info!("Starting web server...");
     let app = Router::new()
-        // Auth
-        .route("/user/register", post(routes::auth::register::register))
-        .route("/user/login", post(routes::auth::login::login))
-        .route("/user/logout", post(routes::auth::logout::logout))
-        .route("/user/delete", delete(routes::auth::delete::delete))
-        .route("/user/list_sessions", get(routes::auth::list_sessions::list_sessions))
+        // Users
+        //-- Auth
+        .route("/user/register", post(routes::users::register::register))
+        .route("/user/login", post(routes::users::login::login))
+        .route("/user/logout", post(routes::users::logout::logout))
+        .route("/user/delete", delete(routes::users::delete::delete))
+        //-- Information
+        .route("/user/list_sessions", get(routes::users::list_sessions::list_sessions))
+        //-- Settings
 
         // Teams
 
@@ -93,6 +107,7 @@ async fn main() {
         .layer(
         	ServiceBuilder::new()
         		.layer(Extension(connection))
+                .layer(Extension(amqp_channel))
         );
     
     let addr = env::var("LISTEN_ADDR")
@@ -103,11 +118,10 @@ async fn main() {
     let axum_builder = axum::Server::try_bind(&socket_addr);
 
     match axum_builder {
-        Ok(_) => {
+        Ok(axum_builder) => {
             info!("Driptorch Controller v{} is now listening on {}!", VERSION, socket_addr);
 
             axum_builder
-                .expect("Passed builder match but still returned error? Halting start-up.")
                 .serve(app.into_make_service_with_connect_info::<SocketAddr>())
                 .await
                 .expect("Failed to bind to port! Halting start-up.");
