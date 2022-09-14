@@ -2,6 +2,9 @@
 Controller for the Driptorch DNS + Proxy.   
 For more information, visit https://driptorch.net/
 
+| [Code](https://git.sr.ht/~eviee/driptorch-controller) | [Issues](https://todo.sr.ht/~eviee/Driptorch) | [Development Mailing List](https://lists.sr.ht/~eviee/driptorch-devel) |
+|-------------------------------------------------------|-----------------------------------------------|------------------------------------------------------------------------|
+
 ---
 
 ## Requirements:
