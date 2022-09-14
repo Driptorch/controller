@@ -10,15 +10,24 @@ use axum::routing::{delete, get, post};
 use dotenv::dotenv;
 use lapin::ConnectionProperties;
 use picky::key::PrivateKey;
-use sea_orm::{ConnectOptions, Database};
+use picky::x509::Cert;
+use sea_orm::{ActiveValue, ColumnTrait, ConnectOptions, Database, EntityTrait, QueryFilter};
 use sea_orm_migration::prelude::*;
 use tower::ServiceBuilder;
+use ulid::Ulid;
+use crate::cert::encrypt_priv_key;
+use crate::cert::generate::{generate_inter_cert, generate_root_cert};
+use crate::cert::generate::InterTarget::{CLIENT, PROXY};
+use crate::cert::Types::{CLIENTINTER, PROXYINTER, ROOT};
+use crate::certificate::Model;
+use crate::entities::certificate;
 
 mod entities;
 mod dns;
 mod util;
 mod routes;
 mod rpc;
+mod cert;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -58,6 +67,9 @@ async fn main() {
     if !Path::new(&env::var("RSA_KEY").expect("RSA_KEY must be set! Halting start-up.")).exists() {
         error!("Please generate an RSA private key for creating certificates!")
     }
+    if !Path::new(&env::var("XCC20_KEY").expect("XCC20_KEY must be set! Halting start-up.")).exists() {
+        error!("Please generate a 32 bits of randomness to encrypt private keys!")
+    }
 
     let root_rsa_key = PrivateKey::from_pem_str(
         &*fs::read_to_string(
@@ -77,6 +89,152 @@ async fn main() {
     migration::Migrator::up(&connection, None)
         .await
         .expect("Failed to run migrations! Halting start-up.");
+
+    info!("Checking for root cert...");
+    let root_cert_model: Option<Model> = certificate::Entity::find()
+        .filter(certificate::Column::CertType.eq(cert::Types::ROOT.to_string()))
+        .one(&connection)
+        .await
+        .expect("Failed to retrieve the root cert from the database! Halting start-up.");
+
+    let root_cert: Cert;
+
+    match root_cert_model {
+        None => {
+            info!("Generating new root cert...");
+
+            let new_root_cert = generate_root_cert(&root_rsa_key)
+                .await
+                .expect("Failed to generate the root cert from private key! Halting start-up.");
+
+            root_cert = new_root_cert.clone();
+
+            let root_insert = certificate::Entity::insert(certificate::ActiveModel {
+                id: ActiveValue::Set(Ulid::new().to_string()),
+                data: ActiveValue::Set(
+                    new_root_cert.to_der().expect("Failed to convert cert into der!")
+                ),
+                key: ActiveValue::set(vec![145, 66, 62, 61, 56, 156, 145, 164]),
+                nonce: ActiveValue::set(vec![145, 71, 62, 66, 56, 156, 145, 164]),
+                cert_type: ActiveValue::Set(ROOT.to_string())
+            })
+                .exec(&connection)
+                .await
+                .expect("Failed to insert new root cert into database! Halting start-up.");
+
+            info!("Generated new root cert: {}", root_insert.last_insert_id);
+        }
+        Some(root_cert_model) => {
+            info!("Found root cert: {}", root_cert_model.id);
+
+            root_cert = Cert::from_der(&root_cert_model.data)
+                .expect("Failed to decode root cert!");
+        }
+    }
+
+    info!("Checking for proxy intermediate cert...");
+    let proxy_inter_model: Option<Model> = certificate::Entity::find()
+        .filter(certificate::Column::CertType.eq(PROXYINTER.to_string()))
+        .one(&connection)
+        .await
+        .expect("Failed to retrieve the proxy intermediate cert from the database! Halting start-up.");
+
+    let proxy_inter_cert: Cert;
+
+    match proxy_inter_model {
+        None => {
+            info!("Generating proxy intermediate cert...");
+
+            // Generate 4096 bit RSA private key
+            let priv_key = PrivateKey::generate_rsa(4096)
+                .expect("Failed to generate a key");
+
+            let encrypted_priv_key = encrypt_priv_key(priv_key
+                .clone()
+                .to_pkcs8()
+                .expect("Failed to convert generated private key to pkcs8!")
+            ).await;
+
+            let new_proxy_inter_cert = generate_inter_cert(&priv_key, PROXY, (&root_cert, &root_rsa_key))
+                .await
+                .expect("Failed to generate new proxy intermediate cert");
+
+            proxy_inter_cert = new_proxy_inter_cert.clone();
+
+            let proxy_inter_insert = certificate::Entity::insert(certificate::ActiveModel {
+                id: ActiveValue::Set(Ulid::new().to_string()),
+                data: ActiveValue::Set(
+                    new_proxy_inter_cert.to_der().expect("Failed to convert cert into der!")
+                ),
+                key: ActiveValue::set(encrypted_priv_key.1),
+                nonce: ActiveValue::set(encrypted_priv_key.0),
+                cert_type: ActiveValue::Set(PROXYINTER.to_string())
+            })
+                .exec(&connection)
+                .await
+                .expect("Failed to insert new proxy intermediate cert into database! Halting start-up.");
+
+            info!("Generated new proxy intermediate cert: {}", proxy_inter_insert.last_insert_id)
+        }
+        Some(proxy_inter_model) => {
+            info!("Found proxy intermediate cert: {}", proxy_inter_model.id);
+
+            proxy_inter_cert = Cert::from_der(&proxy_inter_model.data)
+                .expect("Failed to decode proxy intermediate cert!");
+        }
+    }
+
+    info!("Checking for client intermediate cert...");
+    let client_inter_model: Option<Model> = certificate::Entity::find()
+        .filter(certificate::Column::CertType.eq(CLIENTINTER.to_string()))
+        .one(&connection)
+        .await
+        .expect("Failed to retrieve the client intermediate cert from the database! Halting start-up.");
+
+    let client_inter_cert: Cert;
+
+    match client_inter_model {
+        None => {
+            info!("Generating client intermediate cert...");
+
+            // Generate 4096 bit RSA private key
+            let priv_key = PrivateKey::generate_rsa(4096)
+                .expect("Failed to generate a key");
+
+            let encrypted_priv_key = encrypt_priv_key(priv_key
+                .clone()
+                .to_pkcs8()
+                .expect("Failed to convert generated private key to pkcs8!")
+            ).await;
+
+            let new_client_inter_cert = generate_inter_cert(&priv_key, CLIENT, (&root_cert, &root_rsa_key))
+                .await
+                .expect("Failed to generate new client intermediate cert");
+
+            client_inter_cert = new_client_inter_cert.clone();
+
+            let client_inter_insert = certificate::Entity::insert(certificate::ActiveModel {
+                id: ActiveValue::Set(Ulid::new().to_string()),
+                data: ActiveValue::Set(
+                    new_client_inter_cert.to_der().expect("Failed to convert cert into der!")
+                ),
+                key: ActiveValue::set(encrypted_priv_key.1),
+                nonce: ActiveValue::set(encrypted_priv_key.0),
+                cert_type: ActiveValue::Set(CLIENTINTER.to_string())
+            })
+                .exec(&connection)
+                .await
+                .expect("Failed to insert new client intermediate cert into database! Halting start-up.");
+
+            info!("Generated new client intermediate cert: {}", client_inter_insert.last_insert_id)
+        }
+        Some(client_inter_model) => {
+            info!("Found client intermediate cert: {}", client_inter_model.id);
+
+            client_inter_cert = Cert::from_der(&client_inter_model.data)
+                .expect("Failed to decode client intermediate cert!");
+        }
+    }
 
     info!("Connecting to message broker...");
     let amqp_addr = env::var("AMQP_ADDR")

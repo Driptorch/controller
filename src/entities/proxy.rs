@@ -10,10 +10,19 @@ pub struct Model {
     pub record: String,
     pub port: i32,
     pub active: bool,
+    pub certificate: String,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
 pub enum Relation {
+    #[sea_orm(
+        belongs_to = "super::certificate::Entity",
+        from = "Column::Certificate",
+        to = "super::certificate::Column::Id",
+        on_update = "NoAction",
+        on_delete = "Cascade"
+    )]
+    Certificate,
     #[sea_orm(
         belongs_to = "super::record::Entity",
         from = "Column::Record",
@@ -22,6 +31,12 @@ pub enum Relation {
         on_delete = "Cascade"
     )]
     Record,
+}
+
+impl Related<super::certificate::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::Certificate.def()
+    }
 }
 
 impl Related<super::record::Entity> for Entity {

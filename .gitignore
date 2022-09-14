@@ -4,6 +4,8 @@
 
 # Private files
 .env
+private-key.pem
+private-bytes
 
 # Misc
 regexes.yaml

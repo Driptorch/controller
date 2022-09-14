@@ -29,6 +29,11 @@ impl MigrationTrait for Migration {
                         .binary()
                         .not_null()
                     )
+                    .col(ColumnDef::new(Certificate::Nonce)
+                        .binary()
+                        .not_null()
+                        .unique_key()
+                    )
                     .col(ColumnDef::new(Certificate::CertType)
                         .string()
                         .not_null()
@@ -52,5 +57,6 @@ pub enum Certificate {
     Id,
     Data,
     Key,
+    Nonce,
     CertType
 }

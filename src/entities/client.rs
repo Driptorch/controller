@@ -15,14 +15,24 @@ pub struct Model {
     pub dns: bool,
     pub proxy: bool,
     pub health: String,
+    pub certificate: String,
 }
 
-#[derive(Copy, Clone, Debug, EnumIter)]
-pub enum Relation {}
+#[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
+pub enum Relation {
+    #[sea_orm(
+        belongs_to = "super::certificate::Entity",
+        from = "Column::Certificate",
+        to = "super::certificate::Column::Id",
+        on_update = "NoAction",
+        on_delete = "Cascade"
+    )]
+    Certificate,
+}
 
-impl RelationTrait for Relation {
-    fn def(&self) -> RelationDef {
-        panic!("No RelationDef")
+impl Related<super::certificate::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::Certificate.def()
     }
 }
 
