@@ -23,6 +23,7 @@ For more information, visit https://driptorch.net/
 | DATABASE_URL |                                    PostgreSQL database connection URL                                    |       Y       |
 |  AMQP_ADDR   |                                 Message queue (RabbitMQ) connection URL                                  |       Y       |
 | UAP_REGEXES  | Path to the [BrowserScope UA regex YAML](https://github.com/ua-parser/uap-core/blob/master/regexes.yaml) |       N       |
+|   RSA_KEY    |       Path to the RSA private key used to create certificates !!! KEEP THIS SAFE !!! SERIOUSLY !!!       |       Y       |
 
 ---
 

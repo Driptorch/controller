@@ -46,3 +46,5 @@ async-trait = "0.1.57"
 user-agent-parser = "0.3.3"
 
 lapin = "2.1.1"
+
+picky = "7.0.0-rc.3"

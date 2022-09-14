@@ -1,6 +1,6 @@
 #[macro_use] extern crate log;
 
-use std::env;
+use std::{env, fs};
 use std::net::SocketAddr;
 use std::path::Path;
 
@@ -9,6 +9,7 @@ use axum::Router;
 use axum::routing::{delete, get, post};
 use dotenv::dotenv;
 use lapin::ConnectionProperties;
+use picky::key::PrivateKey;
 use sea_orm::{ConnectOptions, Database};
 use sea_orm_migration::prelude::*;
 use tower::ServiceBuilder;
@@ -54,6 +55,15 @@ async fn main() {
         error!("Please download https://github.com/ua-parser/uap-core/blob/master/regexes.yaml either place it next to the executable or add it's path to env variable UAP_REGEXES! Halting start-up.");
         std::process::exit(1);
     }
+    if !Path::new(&env::var("RSA_KEY").expect("RSA_KEY must be set! Halting start-up.")).exists() {
+        error!("Please generate an RSA private key for creating certificates!")
+    }
+
+    let root_rsa_key = PrivateKey::from_pem_str(
+        &*fs::read_to_string(
+            Path::new(&env::var("RSA_KEY").expect("RSA_KEY must be set! Halting start-up."))
+        ).expect("Failed to load the root RSA key! Halting start-up.")
+    ).expect("Failed to load the root RSA key! Halting start-up.");
 
     info!("Connecting to database...");
     let database_url = env::var("DATABASE_URL")
@@ -97,6 +107,8 @@ async fn main() {
         // Records
 
         // Proxies
+
+        // Admin
 
         // RPC
         .route("/rpc", post(rpc::rpc))
