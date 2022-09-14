@@ -29,7 +29,7 @@ impl MigrationTrait for Migration {
                         .binary()
                         .not_null()
                     )
-                    .col(ColumnDef::new(Certificate::Type)
+                    .col(ColumnDef::new(Certificate::CertType)
                         .string()
                         .not_null()
                     )
@@ -52,5 +52,5 @@ pub enum Certificate {
     Id,
     Data,
     Key,
-    Type
+    CertType
 }
