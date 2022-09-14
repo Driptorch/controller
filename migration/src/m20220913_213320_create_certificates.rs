@@ -1,11 +1,10 @@
 use sea_orm_migration::prelude::*;
-use crate::m20220907_223639_create_records::Record;
 
 pub struct Migration;
 
 impl MigrationName for Migration {
     fn name(&self) -> &str {
-        "m20220907_223653_create_proxies"
+        "m20220913_213320_create_certificates"
     }
 }
 
@@ -15,32 +14,24 @@ impl MigrationTrait for Migration {
         manager
             .create_table(
                 Table::create()
-                    .table(Proxy::Table)
+                    .table(Certificate::Table)
                     .if_not_exists()
-                    .col(ColumnDef::new(Proxy::Id)
+                    .col(ColumnDef::new(Certificate::Id)
                         .string()
                         .not_null()
                         .primary_key()
                     )
-                    .col(ColumnDef::new(Proxy::Record)
+                    .col(ColumnDef::new(Certificate::Data)
+                        .binary()
+                        .not_null()
+                    )
+                    .col(ColumnDef::new(Certificate::Key)
+                        .binary()
+                        .not_null()
+                    )
+                    .col(ColumnDef::new(Certificate::Type)
                         .string()
                         .not_null()
-                    )
-                    .foreign_key(ForeignKey::create()
-                        .name("fk-proxy-record-id")
-                        .from(Proxy::Table, Proxy::Record)
-                        .to(Record::Table, Record::Id)
-                        .on_delete(ForeignKeyAction::Cascade)
-                    )
-                    .col(ColumnDef::new(Proxy::Port)
-                        .integer()
-                        .not_null()
-                        .default(443)
-                    )
-                    .col(ColumnDef::new(Proxy::Active)
-                        .boolean()
-                        .not_null()
-                        .default(true)
                     )
                     .to_owned(),
             )
@@ -49,17 +40,17 @@ impl MigrationTrait for Migration {
 
     async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
         manager
-            .drop_table(Table::drop().table(Proxy::Table).to_owned())
+            .drop_table(Table::drop().table(Certificate::Table).to_owned())
             .await
     }
 }
 
 /// Learn more at https://docs.rs/sea-query#iden
 #[derive(Iden)]
-pub enum Proxy {
+pub enum Certificate {
     Table,
     Id,
-    Record,
-    Port,
-    Active,
+    Data,
+    Key,
+    Type
 }
